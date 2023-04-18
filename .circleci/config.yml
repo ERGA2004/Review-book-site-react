@@ -1,0 +1,59 @@
+version: 2
+jobs:
+  
+  build:
+    working_directory: ~/working
+    docker:
+      - image: circleci/node:10.8.0
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: npm install
+      - run:
+          name: workaround
+          command: npm i terser@3.14
+      - run: 
+          name: Compile react project
+          command: npm run build
+    
+      - run:
+          name: Run test
+          command: npm run test 
+      - persist_to_workspace:
+          root: ~/working
+          paths:
+            - build
+
+  deploy:
+    working_directory: ~/working
+    docker:
+      - image: circleci/python:3.6.4
+    steps:
+      - attach_workspace:
+          at: ~/working
+      #- checkout
+      - run:
+          name: Install awscli
+          command: sudo pip install awscli
+      - run:
+          name: Deploy to S3
+          command: aws s3 sync ./build s3://tech-book-review-site --delete
+      - run:
+          name: prepare to clear cloudfront
+          command: aws configure set preview.cloudfront true
+      - run:
+          name: clear cloudfront
+          command: aws cloudfront create-invalidation --distribution-id EGGLHM8RCTUHQ --paths '/*'
+
+workflows:
+  version: 2
+  build-deploy:
+    jobs:
+      - build
+      - deploy:
+          requires:
+            - build
+          filters:
+            branches:
+              only: master
